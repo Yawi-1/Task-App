@@ -12,15 +12,12 @@ exports.signup = async (req, res) => {
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ message: 'User already exists.' });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
     const otp = genOtp();
     const otpExpires = Date.now() + 5 * 60 * 1000;
 
-    const user = new User({ email, password: hashedPassword, otp, otpExpires });
+    const user = new User({ email, password, otp, otpExpires });
     await user.save();
     await sendEmail(email, `Your OTP is ${otp}.`);
-
     res.status(201).json({ message: "User created! Please verify your email.", user: { email: user.email } });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -31,17 +28,17 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user || !(await bcrypt.compare(user.password, password))) {
+    console.log(user.password === password)
+    if (!user || !(user.password === password)) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-
     if (!user.isVerified) {
       const otp = genOtp();
       user.otp = otp;
       user.otpExpires = Date.now() + 5 * 60 * 1000;
       await user.save();
       await sendEmail(email, `Your OTP is ${otp}.`);
-      return res.status(403).json({ message: 'Please verify your email first.', user: { email: user.email } });
+      return res.status(200).json({ message: 'Please verify your email first.', user: { email: user.email } });
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
@@ -62,7 +59,6 @@ exports.verifyEmail = async (req, res) => {
     user.otpExpires = undefined;
     user.isVerified = true;
     await user.save();
-
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
     res.json({ message: 'Email verified successfully.', token });
   } catch (err) {
